@@ -1031,6 +1031,122 @@ def main():
                     unsafe_allow_html=True,
                 )
 
+        # --- SQL / pandas 相当クエリ ---
+        st.markdown("")
+        st.markdown(
+            '<h3 style="text-align:center; color:#2563eb; font-weight:600; margin-bottom:0.5rem">'
+            'SQL 相当クエリ（内部処理の対応表）</h3>'
+            '<p style="text-align:center; color:#94a3b8; font-size:0.78rem; margin-top:0">'
+            '※ 実際は pandas で処理。SQL に置き換えた場合の対応イメージです</p>',
+            unsafe_allow_html=True,
+        )
+
+        queries = [
+            (
+                "STEP 1 — EC在庫フィルタ",
+                "inv_df[KEY7 == 'EC']",
+                "SELECT *\n"
+                "FROM   inventory\n"
+                "WHERE  PICKING_KEY7 = 'EC';",
+            ),
+            (
+                "STEP 2 — 賞味期限の抽出",
+                "df['Sub Inventory'].apply(parse_expiry)\n"
+                "# 正規表現: r'SS?_(\\d{6})$'",
+                "SELECT *,\n"
+                "  CASE\n"
+                "    WHEN Sub_Inventory RLIKE 'SS?_[0-9]{6}$'\n"
+                "    THEN STR_TO_DATE(\n"
+                "           RIGHT(Sub_Inventory, 6),\n"
+                "           '%y%m%d')\n"
+                "  END AS expiry_date\n"
+                "FROM inventory_ec;",
+            ),
+            (
+                "STEP 3 — Shopee 掲載マッチング",
+                "# 3つのキーで LEFT JOIN 相当\n"
+                "is_on_shopee(row, sku_set, gtin_set, barcode_set)",
+                "SELECT i.*,\n"
+                "  CASE\n"
+                "    WHEN s1.SKU IS NOT NULL       -- KEY1→SKU\n"
+                "      OR s2.GTIN IS NOT NULL      -- Code→GTIN\n"
+                "      OR s3.barcode IS NOT NULL   -- バーコード\n"
+                "    THEN TRUE ELSE FALSE\n"
+                "  END AS shopee_listed\n"
+                "FROM inventory_ec i\n"
+                "  LEFT JOIN shopee s1\n"
+                "    ON i.PICKING_KEY1 = s1.SKU\n"
+                "  LEFT JOIN shopee s2\n"
+                "    ON i.Product_Code = s2.GTIN\n"
+                "  LEFT JOIN shopee s3\n"
+                "    ON i.Product_Code = s3.barcode;",
+            ),
+            (
+                "STEP 4 — Product Code 集約",
+                "df.groupby('Product Code').agg(\n"
+                "  商品名=('Product Name','first'),\n"
+                "  合計数量=('Total Piece Qty','sum'),\n"
+                "  最古入庫日=('Arrival Date','min'), ...)",
+                "SELECT Product_Code,\n"
+                "  MIN(Product_Name)       AS 商品名,\n"
+                "  COUNT(*)                AS 入庫回数,\n"
+                "  MIN(Arrival_Date)       AS 最古入庫日,\n"
+                "  MAX(Arrival_Date)       AS 最新入庫日,\n"
+                "  SUM(Total_Piece_Qty)    AS 合計数量,\n"
+                "  SUM(Case_Qty)           AS 合計ケース数\n"
+                "FROM inventory_ec\n"
+                "GROUP BY Product_Code;",
+            ),
+            (
+                "STEP 5 — Aging分類 & B2B候補",
+                "grouped['滞留日数'] = (today - grouped['最古入庫日']).dt.days\n"
+                "grouped['B2B候補'] = (滞留日数 >= 90) | (合計数量 >= 10)",
+                "SELECT *,\n"
+                "  DATEDIFF(CURDATE(), 最古入庫日)\n"
+                "    AS 滞留日数,\n"
+                "  CASE\n"
+                "    WHEN 滞留日数 <=  30 THEN '0-30日'\n"
+                "    WHEN 滞留日数 <=  60 THEN '31-60日'\n"
+                "    WHEN 滞留日数 <=  90 THEN '61-90日'\n"
+                "    WHEN 滞留日数 <= 180 THEN '91-180日'\n"
+                "    WHEN 滞留日数 <= 365 THEN '181-365日'\n"
+                "    ELSE '365日超'\n"
+                "  END AS Agingカテゴリ,\n"
+                "  CASE\n"
+                "    WHEN 滞留日数 >= 90\n"
+                "      OR 合計数量 >= 10\n"
+                "    THEN TRUE ELSE FALSE\n"
+                "  END AS B2B候補\n"
+                "FROM aggregated\n"
+                "ORDER BY 滞留日数 DESC;",
+            ),
+        ]
+
+        for title, pandas_code, sql_code in queries:
+            st.markdown(
+                f'<div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; '
+                f'padding:1rem 1.2rem; margin-bottom:0.8rem; box-shadow:0 1px 3px rgba(0,0,0,0.06)">'
+                f'<p style="font-weight:600; color:#1e293b; font-size:0.88rem; margin-bottom:0.6rem">{title}</p>'
+                f'<div style="display:flex; gap:1rem; flex-wrap:wrap">',
+                unsafe_allow_html=True,
+            )
+            col_pd, col_sql = st.columns(2)
+            with col_pd:
+                st.markdown(
+                    '<p style="color:#16a34a; font-weight:600; font-size:0.75rem; margin-bottom:0.2rem">'
+                    'pandas (実装コード)</p>',
+                    unsafe_allow_html=True,
+                )
+                st.code(pandas_code, language="python")
+            with col_sql:
+                st.markdown(
+                    '<p style="color:#2563eb; font-weight:600; font-size:0.75rem; margin-bottom:0.2rem">'
+                    'SQL 相当</p>',
+                    unsafe_allow_html=True,
+                )
+                st.code(sql_code, language="sql")
+            st.markdown('</div></div>', unsafe_allow_html=True)
+
         return
 
     # =========================================
