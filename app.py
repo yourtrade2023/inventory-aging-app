@@ -957,6 +957,80 @@ def main():
             '<strong>「分析実行」</strong>を押してください</p></div>',
             unsafe_allow_html=True,
         )
+
+        # --- 処理ロジック説明 ---
+        st.markdown("---")
+        st.markdown(
+            '<h3 style="text-align:center; color:#2563eb; font-weight:600; margin-bottom:0.5rem">'
+            '処理フロー</h3>',
+            unsafe_allow_html=True,
+        )
+
+        flow_cols = st.columns(4)
+        flow_steps = [
+            ("1️⃣ データ読込", [
+                "在庫リスト (.xlsx) を読込",
+                "Shopee商品リスト (.xlsx) を読込",
+                "Shopeeは4行目〜データ / calamine使用",
+            ]),
+            ("2️⃣ フィルタ & 期限解析", [
+                "PICKING KEY7 = 'EC' で絞込",
+                "Sub Inventory から賞味期限を抽出",
+                "例: SS_260301 → 2026/03/01",
+            ]),
+            ("3️⃣ Shopee掲載判定", [
+                "① PICKING KEY1 → SKU 一致",
+                "② Product Code → GTIN 一致",
+                "③ SKU分解 → バーコード照合",
+            ]),
+            ("4️⃣ 集計 & 分類", [
+                "Product Code で集約",
+                "滞留日数でAging分類 (6段階)",
+                "期限ステータス / B2B候補判定",
+            ]),
+        ]
+        for col, (title, items) in zip(flow_cols, flow_steps):
+            with col:
+                st.markdown(
+                    f'<div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; '
+                    f'padding:1rem; height:100%; box-shadow:0 1px 3px rgba(0,0,0,0.06)">'
+                    f'<p style="font-weight:600; color:#1e293b; font-size:0.85rem; margin-bottom:0.5rem">{title}</p>'
+                    + "".join(
+                        f'<p style="color:#64748b; font-size:0.78rem; margin:0.2rem 0; line-height:1.4">• {item}</p>'
+                        for item in items
+                    )
+                    + '</div>',
+                    unsafe_allow_html=True,
+                )
+
+        st.markdown("")
+        st.markdown(
+            '<h3 style="text-align:center; color:#2563eb; font-weight:600; margin-bottom:0.5rem">'
+            '出力内容</h3>',
+            unsafe_allow_html=True,
+        )
+        out_cols = st.columns(4)
+        outputs = [
+            ("📊 KPIカード", "総SKU数 / Shopee掲載数\n期限注意数 / B2B候補数"),
+            ("📋 Aging集計表", "カテゴリ別の数量・金額\nSKU件数の分布"),
+            ("⚠️ 期限注意リスト", "期限切れ・3ヶ月以内の商品\n色分け表示（赤/オレンジ）"),
+            ("📤 Excel / Slack", "4シート構成のExcel出力\nSlack Bot でファイル送信"),
+        ]
+        for col, (title, desc) in zip(out_cols, outputs):
+            with col:
+                lines = desc.split("\n")
+                st.markdown(
+                    f'<div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; '
+                    f'padding:1rem; text-align:center; box-shadow:0 1px 3px rgba(0,0,0,0.06)">'
+                    f'<p style="font-weight:600; color:#1e293b; font-size:0.85rem; margin-bottom:0.3rem">{title}</p>'
+                    + "".join(
+                        f'<p style="color:#64748b; font-size:0.78rem; margin:0.15rem 0">{line}</p>'
+                        for line in lines
+                    )
+                    + '</div>',
+                    unsafe_allow_html=True,
+                )
+
         return
 
     # =========================================
